@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title></title>
+<head>
+    <link href="bootstrap.min.css" rel="stylesheet">
+</head>
+
+<style>
+
+textarea {
+    display: block;
+    margin-bottom: 10px;
+    width: 50%;
+    height: 400px;
+    font-family: monospace;
+    font-size: 12pt;
+}
+
+input {
+    margin-bottom: 10px;
+    font-size: 14pt;
+    font-family: monospace;
+}
+
+</style>
+<script>
+function generateSalt(length) {
+    return window.crypto.getRandomValues(new Uint8Array(length));
+}
+
+function base64ToBuffer(base64) {
+    return Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+}
+
+async function deriveKey(password, salt, kdf, iterations, hash, cipher, keyLength) {
+    const keyMaterial = await window.crypto.subtle.importKey(
+        "raw",
+        new TextEncoder().encode(password),
+        { name: kdf },
+        false,
+        ["deriveKey"]
+    );
+    return window.crypto.subtle.deriveKey(
+        {
+            name: kdf,
+            salt: salt,
+            iterations: iterations,
+            hash: hash
+        },
+        keyMaterial,
+        { name: cipher, length: keyLength },
+        false,
+        ["encrypt", "decrypt"]
+    );
+}
+
+async function encryptText() {
+    const password = document.getElementById("password").value;
+    const passwordHint = document.getElementById("hint").value;
+    const text = document.getElementById("plaintext").value;
+    const salt = generateSalt(16);
+    const iv = window.crypto.getRandomValues(new Uint8Array(12)); // 96 bits for AES-GCM
+    const key = await deriveKey(password, salt, "PBKDF2", 100000, "SHA-256", "AES-GCM", 256);
+    const encryptedData = await window.crypto.subtle.encrypt(
+        {
+            name: "AES-GCM",
+            iv: iv,
+            tagLength: 128
+        },
+        key,
+        new TextEncoder().encode(text)
+    );
+
+    document.getElementById("encrypted").value = JSON.stringify({
+        version: "1",
+        cipher: "AES-GCM",
+        tagLength: 128,
+        textEncoding: "utf-8",
+        ciphertextEncoding: "base64",
+        kdf: {name: "PBKDF2", iterations: 100000, hash: "SHA-256", length: 256},
+        passwordHint: passwordHint,
+        salt: window.btoa(String.fromCharCode.apply(null, salt)),
+        iv: window.btoa(String.fromCharCode.apply(null, iv)),
+        ciphertext: window.btoa(String.fromCharCode.apply(null, new Uint8Array(encryptedData))),
+    }, null, 2);
+}
+
+async function decryptText() {
+    const password = document.getElementById("password").value;
+    const encryptedData = JSON.parse(document.getElementById("encrypted").value);
+    const salt = Uint8Array.from(atob(encryptedData.salt), c => c.charCodeAt(0));
+    const iv = Uint8Array.from(atob(encryptedData.iv), c => c.charCodeAt(0));
+    const ciphertext = Uint8Array.from(atob(encryptedData.ciphertext), c => c.charCodeAt(0));
+
+    const key = await deriveKey(password, salt, encryptedData.kdf.name, encryptedData.kdf.iterations, encryptedData.kdf.hash, encryptedData.cipher, encryptedData.kdf.length);
+    const decryptedData = await window.crypto.subtle.decrypt(
+        {
+            name: encryptedData.cipher,
+            iv: iv,
+            tagLength: encryptedData.tagLength
+        },
+        key,
+        ciphertext
+    );
+    document.getElementById("decrypted").value = new TextDecoder().decode(decryptedData);
+}
+
+
+</script>
+</head>
+<body>
+    <div class="container py-5">
+        <h2>Simple AES-GCM Encrypt and Decrypt</h2>
+        <div class="mb-3">
+            <label for="plaintext" class="form-label">Plaintext:</label>
+            <textarea class="form-control" id="plaintext" rows="4"></textarea>
+        </div>
+        <div class="mb-3">
+            <label for="password" class="form-label">Password:</label>
+            <input type="password" class="form-control" id="password">
+        </div>
+        <div class="mb-3">
+            <label for="hint" class="form-label">Hint:</label>
+            <input type="text" class="form-control" id="hint">
+        </div>
+        <div class="text-center mb-3">
+            <button onclick="encryptText()" class="btn btn-primary me-2">Encrypt</button>
+            <button onclick="decryptText()" class="btn btn-secondary">Decrypt</button>
+        </div>
+        <div class="mb-3">
+            <label for="encrypted" class="form-label">Encrypted (JSON):</label>
+            <textarea class="form-control" id="encrypted" rows="4"></textarea>
+        </div>
+        <div class="mb-3">
+            <label for="decrypted" class="form-label">Decrypted Text:</label>
+            <textarea class="form-control" id="decrypted" rows="4" readonly></textarea>
+        </div>
+    </div>
+    </body>
+</html>
+
