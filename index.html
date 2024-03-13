@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title></title>
+<title>decryptor</title>
 <head>
     <link href="bootstrap.min.css" rel="stylesheet">
 </head>
@@ -108,11 +108,26 @@ async function decryptText() {
     document.getElementById("decrypted").value = new TextDecoder().decode(decryptedData);
 }
 
-
+window.onload = function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const encryptedData = urlParams.get('data'); // Assuming 'data' is the query parameter
+    if (!encryptedData) {
+        console.log("No encrypted data found in URL.");
+        return;
+    }
+    document.getElementById("encrypted").value = atob(encryptedData);    
+    // hide #interface
+    document.getElementById("interface").style.display = "none";
+    password = prompt("Enter password to decrypt the message.");
+    //set #password to password
+    document.getElementById("password").value = password;
+    decryptText();
+}
 </script>
 </head>
 <body>
     <div class="container py-5">
+        <span id="interface">
         <h2>Simple AES-GCM Encrypt and Decrypt</h2>
         <div class="mb-3">
             <label for="plaintext" class="form-label">Plaintext:</label>
@@ -134,6 +149,7 @@ async function decryptText() {
             <label for="encrypted" class="form-label">Encrypted (JSON):</label>
             <textarea class="form-control" id="encrypted" rows="4"></textarea>
         </div>
+    </span>
         <div class="mb-3">
             <label for="decrypted" class="form-label">Decrypted Text:</label>
             <textarea class="form-control" id="decrypted" rows="4" readonly></textarea>
